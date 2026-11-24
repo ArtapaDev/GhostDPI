@@ -1,0 +1,70 @@
+name: Verify WinDivert Binaries
+
+on:
+  workflow_dispatch:
+
+jobs:
+  compare:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Compare bin/WinDivert* against official basil00/WinDivert releases (bytes and PE code)
+        run: |
+          set -euo pipefail
+          echo "=== Local repository bin/ hashes ==="
+          sha256sum bin/WinDivert64.sys bin/WinDivert.dll
+
+          mkdir -p /tmp/wd
+          for src in \
+            "https://github.com/basil00/WinDivert/releases/download/v2.2.0/WinDivert-2.2.0-A.zip" \
+            "https://github.com/basil00/WinDivert/releases/download/v2.2.0/WinDivert-2.2.0-B.zip" \
+            "https://github.com/basil00/WinDivert/releases/download/v2.2.0/WinDivert-2.2.0-C.zip" \
+            "https://reqrypt.org/download/WinDivert-2.2.0-D.zip" \
+            "https://github.com/basil00/WinDivert/releases/download/v2.2.1/WinDivert-2.2.1-A.zip" \
+            "https://github.com/basil00/WinDivert/releases/download/v2.2.2/WinDivert-2.2.2-A.zip"; do
+            zip=$(basename "$src")
+            echo ""
+            echo "=== Official ${zip} ==="
+            if ! curl -fLsS "$src" -o "/tmp/wd/${zip}"; then
+              echo "UNAVAILABLE: ${src}"
+              continue
+            fi
+            sha256sum "/tmp/wd/${zip}"
+            rm -rf /tmp/wd/extract && mkdir -p /tmp/wd/extract
+            unzip -q "/tmp/wd/${zip}" -d /tmp/wd/extract
+            sys=$(find /tmp/wd/extract -path '*/x64/WinDivert64.sys' | head -n 1)
+            dll=$(find /tmp/wd/extract -path '*/x64/WinDivert.dll' | head -n 1)
+            sha256sum "$sys" "$dll"
+            if cmp -s bin/WinDivert64.sys "$sys"; then
+              echo "MATCH_SYS: bin/WinDivert64.sys == ${zip}"
+            fi
+            if cmp -s bin/WinDivert.dll "$dll"; then
+              echo "MATCH_DLL: bin/WinDivert.dll == ${zip}"
+            fi
+            # Also compare PE image bytes stripping only PE checksum + Authenticode signature table
+            python3 - bin/WinDivert64.sys "$sys" "$zip" <<'PY'
+          import hashlib, struct, sys
+
+          def pe_code_hash(path):
+              data = bytearray(open(path, "rb").read())
+              pe = struct.unpack_from("<I", data, 0x3C)[0]
+              magic = struct.unpack_from("<H", data, pe + 24)[0]
+              opt_size = 112 if magic == 0x20B else 96
+              sec_off = pe + 24 + opt_size + 4 * 8   # Security Directory (entry #4)
+              cert_off, cert_sz = struct.unpack_from("<II", data, sec_off)
+              # Zero PE checksum (pe+88) and Security Directory entry, strip appended cert table
+              data[pe + 88 : pe + 92] = b"\x00" * 4
+              data[sec_off : sec_off + 8] = b"\x00" * 8
+              if cert_off and cert_sz and cert_off + cert_sz == len(data):
+                  data = data[:cert_off]
+              return hashlib.sha256(data).hexdigest()
+
+          h_local = pe_code_hash(sys.argv[1])
+          h_ref   = pe_code_hash(sys.argv[2])
+          if h_local == h_ref:
+              print(f"MATCH_PE_CODE: bin/WinDivert64.sys code == {sys.argv[3]} (sha256={h_local})")
+          else:
+              print(f"DIFF_PE_CODE: local={h_local[:16]} vs {sys.argv[3]}={h_ref[:16]}")
+          PY
+          done

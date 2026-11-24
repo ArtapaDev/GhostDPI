@@ -1,0 +1,31 @@
+; Import definitions for WinDivert.dll 2.2 (x64), used to build WinDivert.lib.
+LIBRARY WinDivert
+EXPORTS
+    WinDivertOpen
+    WinDivertRecv
+    WinDivertRecvEx
+    WinDivertSend
+    WinDivertSendEx
+    WinDivertShutdown
+    WinDivertClose
+    WinDivertSetParam
+    WinDivertGetParam
+    WinDivertHelperHashPacket
+    WinDivertHelperParsePacket
+    WinDivertHelperParseIPv4Address
+    WinDivertHelperParseIPv6Address
+    WinDivertHelperFormatIPv4Address
+    WinDivertHelperFormatIPv6Address
+    WinDivertHelperCalcChecksums
+    WinDivertHelperDecrementTTL
+    WinDivertHelperCompileFilter
+    WinDivertHelperEvalFilter
+    WinDivertHelperFormatFilter
+    WinDivertHelperNtohs
+    WinDivertHelperHtons
+    WinDivertHelperNtohl
+    WinDivertHelperHtonl
+    WinDivertHelperNtohll
+    WinDivertHelperHtonll
+    WinDivertHelperNtohIPv6Address
+    WinDivertHelperHtonIPv6Address
